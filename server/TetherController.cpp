@@ -718,23 +718,17 @@ int TetherController::setForwardRules(bool add, const char *intIface, const char
         "*raw\n"
         "%s %s -i %s -m rpfilter --invert ! -s fe80::/64 -j DROP\n"
         "COMMIT\n", op, LOCAL_RAW_PREROUTING, intIface);
-    if (iptablesRestoreFunction(V6, rpfilterCmd, nullptr) == -1 && add && false) {
+    if (iptablesRestoreFunction(V6, rpfilterCmd, nullptr) == -1 && add) {
         return -EREMOTEIO;
     }
 
-    std::vector<std::string> v4Ftp = {
+    std::vector<std::string> v4 = {
             "*raw",
-            StringPrintf("%s %s -p tcp --dport 21 -i %s -j CT --helper ftp",
-                            op, LOCAL_RAW_PREROUTING, intIface),
+            StringPrintf("%s %s -p tcp --dport 21 -i %s -j CT --helper ftp", op,
+                         LOCAL_RAW_PREROUTING, intIface),
             StringPrintf("%s %s -p tcp --dport 1723 -i %s -j CT --helper pptp", op,
                          LOCAL_RAW_PREROUTING, intIface),
             "COMMIT",
-    };
-    if(iptablesRestoreFunction(V4, Join(v4Ftp, '\n'), nullptr) == -1) {
-            ALOGE("Failed adding iptables CT target on FTP.");
-    }
-
-    std::vector<std::string> v4 = {
             "*filter",
             StringPrintf("%s %s -i %s -o %s -m state --state ESTABLISHED,RELATED -g %s", op,
                          LOCAL_FORWARD, extIface, intIface, LOCAL_TETHER_COUNTERS_CHAIN),
