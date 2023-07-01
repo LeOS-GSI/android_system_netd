@@ -51,8 +51,8 @@
 #include "InterfaceController.h"
 #include "NetdConstants.h"
 #include "NetworkController.h"
-#include "OffloadUtils.h"
 #include "Permission.h"
+#include "TcUtils.h"
 #include "TetherController.h"
 
 #include "android/net/TetherOffloadRuleParcel.h"
@@ -350,8 +350,7 @@ int TetherController::stopTethering() {
 
     ALOGD("Stopping tethering services");
 
-    kill(mDaemonPid, SIGTERM);
-    waitpid(mDaemonPid, nullptr, 0);
+    ::stopProcess(mDaemonPid, "tethering(dnsmasq)");
     mDaemonPid = 0;
     close(mDaemonFd);
     mDaemonFd = -1;
@@ -719,17 +718,23 @@ int TetherController::setForwardRules(bool add, const char *intIface, const char
         "*raw\n"
         "%s %s -i %s -m rpfilter --invert ! -s fe80::/64 -j DROP\n"
         "COMMIT\n", op, LOCAL_RAW_PREROUTING, intIface);
-    if (iptablesRestoreFunction(V6, rpfilterCmd, nullptr) == -1 && add) {
+    if (iptablesRestoreFunction(V6, rpfilterCmd, nullptr) == -1 && add && false) {
         return -EREMOTEIO;
     }
 
-    std::vector<std::string> v4 = {
+    std::vector<std::string> v4Ftp = {
             "*raw",
-            StringPrintf("%s %s -p tcp --dport 21 -i %s -j CT --helper ftp", op,
-                         LOCAL_RAW_PREROUTING, intIface),
+            StringPrintf("%s %s -p tcp --dport 21 -i %s -j CT --helper ftp",
+                            op, LOCAL_RAW_PREROUTING, intIface),
             StringPrintf("%s %s -p tcp --dport 1723 -i %s -j CT --helper pptp", op,
                          LOCAL_RAW_PREROUTING, intIface),
             "COMMIT",
+    };
+    if(iptablesRestoreFunction(V4, Join(v4Ftp, '\n'), nullptr) == -1) {
+            ALOGE("Failed adding iptables CT target on FTP.");
+    }
+
+    std::vector<std::string> v4 = {
             "*filter",
             StringPrintf("%s %s -i %s -o %s -m state --state ESTABLISHED,RELATED -g %s", op,
                          LOCAL_FORWARD, extIface, intIface, LOCAL_TETHER_COUNTERS_CHAIN),
@@ -879,7 +884,7 @@ int TetherController::addForwardChainStats(TetherStatsList& statsList,
          * which is what TetherController sets up.
          * The 1st matches rx, and sets up the pair for the tx side.
          */
-        if (!stats.intIface[0]) {
+        if (stats.intIface.empty()) {
             ALOGV("0Filter RX iface_in=%s iface_out=%s rx_bytes=%" PRId64 " rx_packets=%" PRId64
                   " ", iface0.c_str(), iface1.c_str(), bytes, packets);
             stats.intIface = iface0;

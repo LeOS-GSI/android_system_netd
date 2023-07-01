@@ -36,6 +36,12 @@ bool compUidRangeParcel(const UidRangeParcel& lhs, const UidRangeParcel& rhs) {
     return lhs.start != rhs.start ? (lhs.start < rhs.start) : (lhs.stop < rhs.stop);
 };
 
+// Check whether two uid ranges have overlapped uid. For any uid included in both ranges, it is
+// considered as overlap.
+bool isOverlapped(const UidRangeParcel& r1, const UidRangeParcel& r2) {
+    return (r1.stop >= r2.start) && (r1.start <= r2.stop);
+}
+
 UidRangeParcel makeUidRangeParcel(int start, int stop) {
     UidRangeParcel res;
     res.start = start;
@@ -127,26 +133,11 @@ void UidRanges::remove(const UidRanges& other) {
     mRanges.erase(end, mRanges.end());
 }
 
-bool UidRanges::isOverlapped(const UidRangeParcel& r1, const UidRangeParcel& r2) const {
-    return (r1.stop >= r2.start) && (r1.start <= r2.stop);
-}
-
 bool UidRanges::overlapsSelf() const {
     // Compare each element one by one
     for (size_t i = 0; i < mRanges.size(); i++) {
         for (size_t j = i + 1; j < mRanges.size(); j++) {
             if (isOverlapped(mRanges[i], mRanges[j])) {
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
-bool UidRanges::overlaps(const UidRanges& other) const {
-    for (const auto& thisRange : mRanges) {
-        for (const auto& inputRange : other.getRanges()) {
-            if (isOverlapped(thisRange, inputRange)) {
                 return true;
             }
         }
